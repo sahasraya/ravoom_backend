@@ -449,6 +449,29 @@ async def create_tables():
                     print("Table 'notification' created successfully.")
                     
                     
+                    create_user_blocked_table_query = """
+                        CREATE TABLE IF NOT EXISTS user_blocked (
+                            blockedid INT(11) NOT NULL AUTO_INCREMENT,
+                            userid INT(11) DEFAULT NULL,
+                            username VARCHAR(100) DEFAULT NULL,
+                            blockeduserid INT(11) DEFAULT NULL,
+                            blockeddate DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            blockeduserprofile LONGBLOB DEFAULT NULL,
+                            PRIMARY KEY (blockedid),
+                            FOREIGN KEY (userid) REFERENCES user(userid) ON DELETE CASCADE ON UPDATE CASCADE,
+                            FOREIGN KEY (blockeduserid) REFERENCES user(userid) ON DELETE CASCADE ON UPDATE CASCADE
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+                    """
+
+                    await cursor.execute(create_user_blocked_table_query)
+                    print("Table 'user_blocked' created successfully.")
+
+                    
+                    
+                  
+                    
+                    
+                    
                     
                     
                     
@@ -660,6 +683,137 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 
 
 
+
+async def get_user_by_id(selectedrepostpostowneruid: str):
+    # Query to fetch username and emailaddress from the USER table
+    query = "SELECT username, emailaddress FROM user WHERE userid = %s"
+
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute(query, (selectedrepostpostowneruid,))
+                result = await cursor.fetchone()
+
+                if result:
+                    return result["username"], result["emailaddress"]
+                else:
+                    raise HTTPException(status_code=404, detail="User not found")
+
+    except Exception as e:
+        print(f"Error fetching user: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching user data")
+    
+    
+
+@app.post("/report_post")
+async def report_post(
+    selectedOption: str = Form(...),
+    selectedreportPostId: str = Form(...),
+    selectedrepostpostowneruid: str = Form(...),
+):
+    sender_email = "dilshanwickramaarachchi99@gmail.com"
+    password = "lqtj loqv aiqz wsty"
+    additional_recipient = "dev@ravoom.com"
+
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute("SELECT username, emailaddress FROM user WHERE userid = %s", (selectedrepostpostowneruid,))
+                result = await cursor.fetchone()
+
+                if not result:
+                    raise HTTPException(status_code=404, detail="User not found")
+
+                username, receiver_email = result["username"], result["emailaddress"]
+
+    except Exception as e:
+        print(f"Error fetching user: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching user data")
+
+    message = MIMEMultipart("alternative")
+    message["Subject"] = "Report Submission Received"
+    message["From"] = sender_email
+    message["To"] = receiver_email  
+
+    print(f"Sending email to: {receiver_email} and {additional_recipient}")
+
+    html = f"""
+    <html>
+      <head>
+        <style>
+          .btn-link {{
+            background-color: rgb(43, 149, 236);
+            color: #e0e0e0;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 20px;
+            font-weight: bold;
+            display: inline-block;
+            transition: background-color 0.3s, color 0.3s;
+          }}
+          .btn-link:hover {{
+            background-color: rgb(32, 121, 200);
+            color: #e0e0e0;
+          }}
+        </style>
+      </head>
+      <body>
+        <h1>Hey {username},</h1>
+        <p>We've received a report for a post with the following details:</p>
+        <ul>
+          <li><strong>Report Option:</strong> {selectedOption}</li>
+          <li><strong>Post ID:</strong> {selectedreportPostId}</li>
+        </ul>
+        <p>To view more details, visit your account by clicking the link below:</p>
+        <p><a href="http://localhost:4200/home/comment/{selectedreportPostId}/n/home" class="btn-link">View Post</a></p>
+        <p>Best Wishes,<br>Team Ravoom</p>
+        <img src="cid:crabber_header" alt="Crabber Header" style="max-width: 40%; height: auto;"/>
+      </body>
+    </html>
+    """
+
+    part = MIMEText(html, "html")
+    message.attach(part)
+
+    image_path = "images/crabber_header.png"
+    try:
+        with open(image_path, 'rb') as img:
+            img_data = img.read()
+            image = MIMEImage(img_data, name=os.path.basename(image_path))
+            image.add_header('Content-ID', '<crabber_header>')
+            message.attach(image)
+    except Exception as e:
+        print(f"Error attaching image: {e}")
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, password)
+            recipients = [receiver_email, additional_recipient]
+            server.sendmail(sender_email, recipients, message.as_string())
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        raise HTTPException(status_code=500, detail="Error sending email")
+
+    return JSONResponse(content={"message": "Report submitted successfully, email sent."}, status_code=200)
+    
+    
+    
+    
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+    
+
+
+
+
  
  
  
@@ -787,7 +941,7 @@ async def sign_up(
                 INSERT INTO user (userid, username, birthdate, age, emailaddress, phonenumber, profileimage, createddate, password, onlinestatus)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
-                await cursor.execute(insert_query, (user_id, username, birthdate, age, emailaddress, phonenumber, image_data, createddate, password, onlinestatus))
+                await cursor.execute(insert_query, (user_id, username, birthdate, age, emailaddress, '000000000', image_data, createddate, password, onlinestatus))
                 
                 await conn.commit()
 
@@ -802,8 +956,81 @@ async def sign_up(
 
 
 
+@app.post("/sign-up-with-google")
+async def sign_up_with_google(
+    username: str = Form(...),
+    birthdate: str = Form(...),
+    emailaddress: str = Form(...),
+    profileimage: str = Form(...),   
+):
+    try:
+        print(f"Received data: username={username}, birthdate={birthdate}, emailaddress={emailaddress}, profileimage={profileimage}")
+
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                check_email_query = "SELECT COUNT(*) FROM user WHERE emailaddress = %s"
+                await cursor.execute(check_email_query, (emailaddress,))
+                result = await cursor.fetchone()
+
+                if result[0] > 0:
+                    # Email already exists
+                    print(f"Email {emailaddress} already exists.")
+                    return JSONResponse(content={"message": "Email address already exists"}, status_code=400)
+
+                createddate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                onlinestatus = 0
+                user_id = generate_random_user_id()
+
+                image_data = None
+                if profileimage.startswith("http"):  
+                    print(f"Fetching image from URL: {profileimage}")
+                    try:
+                        image_data = await fetch_image_from_url(profileimage)
+                    except Exception as e:
+                        print(f"Error fetching image: {e}")
+                        raise HTTPException(status_code=400, detail="Failed to fetch image from URL")
+                else:   
+                    try:
+                        image_data = base64.b64decode(profileimage.split(',')[1])   
+                    except Exception as e:
+                        print(f"Error decoding base64 image: {e}")
+                        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+                
+                insert_query = """
+                INSERT INTO user (userid, username, birthdate, age, emailaddress, phonenumber, profileimage, createddate, password, onlinestatus)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                await cursor.execute(insert_query, (user_id, username, birthdate, 0, emailaddress, '0775004178', image_data, createddate, 'awfwfa', onlinestatus))
+                await conn.commit()
+
+        return JSONResponse(content={"message": "User created successfully", "userid": user_id}, status_code=201)
+
+    except Exception as e:
+        print(f"Error creating user: {e}")
+        raise HTTPException(status_code=500, detail="Server error")
 
 
+
+
+async def fetch_image_from_url(url: str) -> bytes:
+    """Fetches an image from a URL and returns the binary data"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            if response.status_code == 200:
+                print(f"Successfully fetched image from URL: {url}")
+                return response.content   
+            else:
+                print(f"Failed to fetch image. Status code: {response.status_code}, URL: {url}")
+                raise HTTPException(status_code=400, detail=f"Failed to fetch image from URL. Status code: {response.status_code}")
+    except Exception as e:
+        print(f"Error fetching image from URL: {url}, Error: {e}")
+        raise HTTPException(status_code=400, detail="Error fetching image from URL")
+    
+    
+    
+    
+    
 
 
 
@@ -2074,7 +2301,7 @@ async def update_groupmainimage(
 @app.post("/update-user-profile")
 async def update_user_profile(
     userid: str = Form(...),
-    profileimage: UploadFile = File(...)
+    profileimage: UploadFile = File(...),
 ):
     try:
         profileimage_data = await profileimage.read()
@@ -2087,6 +2314,13 @@ async def update_user_profile(
                 WHERE userid = %s
                 """
                 await cursor.execute(update_profile_image, (profileimage_data, userid))
+
+                update_post_user_profile = """
+                UPDATE post
+                SET userprofile = %s
+                WHERE userid = %s
+                """
+                await cursor.execute(update_post_user_profile, (profileimage_data, userid))
 
                 await conn.commit()
 
@@ -2113,6 +2347,7 @@ async def update_groupinformation(
     groupname: str = Form(...),
 ):
     try:
+    
         async with pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
                 fetch_group_image = """
@@ -2140,6 +2375,16 @@ async def update_groupinformation(
                     WHERE groupid = %s
                     """
                     await cursor.execute(update_group_info_post_table, (groupname, groupid))
+                    
+                    
+                    
+                    
+                    update_group_info_groupnumber_table = """
+                    UPDATE groupmembercount
+                    SET groupname = %s 
+                    WHERE groupid = %s
+                    """
+                    await cursor.execute(update_group_info_groupnumber_table, (groupname, groupid))
                     
                     
                 
@@ -3028,6 +3273,78 @@ async def log_in(
 
 
 
+
+
+
+
+
+
+
+
+
+
+@app.post("/log-in-with-google")
+async def log_in_with_google(
+    emailaddress: str = Form(...),
+):
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                query = """
+                SELECT emailaddress, userid, emailauth FROM user 
+                WHERE emailaddress = %s
+                """
+                await cursor.execute(query, (emailaddress,))
+                user = await cursor.fetchone()
+
+                if user:
+                    if user['emailauth'] == 0:
+                        return JSONResponse(
+                            content={"message": "Please confirm the email"},
+                            status_code=200
+                        )
+                    else:
+                        return JSONResponse(
+                            content={
+                                "message": "Email address already exists",
+                                "userid": user["userid"]
+                            },
+                            status_code=200
+                        )
+                else:
+                    return JSONResponse(
+                        content={"message": "No user found"},
+                        status_code=200
+                    )
+
+    except aiomysql.Error as e:
+        print(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
 VIDEO_UPLOAD_DIR = "../ravoom/ravoom_social/src/assets/video_files"
 AUDIO_UPLOAD_DIR = "../ravoom/ravoom_social/src/assets/audio_files"
 
@@ -3879,19 +4196,34 @@ async def get_posts_feed_group(
             
 @app.get("/get_posts_feed")
 async def get_posts_feed(
-    limit: int = Query(5, ge=1),
-    offset: int = Query(0, ge=0)
-    
-    ):
+    limit: int = Query(5, ge=1), 
+    offset: int = Query(0, ge=0),
+    useridexported: str = Query(None)  
+):
     global pool
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             try:
-                await cursor.execute("""
-                    SELECT * FROM post
-                    ORDER BY posteddate DESC
-                    LIMIT %s OFFSET %s
-                """, (limit, offset))
+                if useridexported:
+                    await cursor.execute("""
+                        SELECT blockeduserid FROM user_blocked WHERE userid = %s
+                    """, (useridexported,))
+                    blocked_users = await cursor.fetchall()
+                    blocked_user_ids = [user['blockeduserid'] for user in blocked_users]
+
+                    await cursor.execute("""
+                        SELECT * FROM post
+                        WHERE userid NOT IN (%s)
+                        ORDER BY RAND()
+                        LIMIT %s OFFSET %s
+                    """, (', '.join(str(id) for id in blocked_user_ids), limit, offset))
+                else:
+                    await cursor.execute("""
+                        SELECT * FROM post
+                        ORDER BY RAND()
+                        LIMIT %s OFFSET %s
+                    """, (limit, offset))
+
                 records = await cursor.fetchall()
 
                 processed_records = []
@@ -3899,12 +4231,11 @@ async def get_posts_feed(
                 for record in records:
                     if record['posttype'] == 'image':
                         await cursor.execute("""
-                            SELECT p.userid, p.username, p.postdescription, p.posteddate, p.userprofile, p.posttype, p.postid,p.n_or_g,p.groupname,p.groupid,p.grouptype,
+                            SELECT p.userid, p.username, p.postdescription, p.posteddate, p.userprofile, p.posttype, p.postid, p.n_or_g, p.groupname, p.groupid, p.grouptype,
                                 i.image
                             FROM post p
                             LEFT JOIN image i ON p.postid = i.postid
                             WHERE p.posttype = 'image' AND p.postid = %s
-                            ORDER BY p.posteddate DESC
                         """, (record['postid'],))
                         image_records = await cursor.fetchall()
 
@@ -3916,7 +4247,7 @@ async def get_posts_feed(
 
                             processed_records.append(image_record)
 
-                    elif record['posttype'] in ['video', 'audio', 'text', 'link','group']:
+                    elif record['posttype'] in ['video', 'audio', 'text', 'link', 'group']:
                         post_record = {
                             'postid': record['postid'],
                             'userid': record['userid'],
@@ -3943,6 +4274,7 @@ async def get_posts_feed(
             except aiomysql.Error as err:
                 print(f"Error: {err}")
                 raise HTTPException(status_code=500, detail="Internal Server Error")
+
             
             
             
@@ -3955,7 +4287,65 @@ async def get_posts_feed(
 
 
 
+@app.post("/blocking_user")
+async def blocking_user(
+    blockeduserid: str = Form(),
+    curruntuserid: str = Form(),
+):
+    global pool
 
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute(""" 
+                    SELECT username, profileimage FROM user WHERE userid = %s 
+                """, (blockeduserid,))
+                user_details = await cursor.fetchone()
+
+                if not user_details:
+                    raise HTTPException(status_code=404, detail="User not found")
+
+                await cursor.execute(""" 
+                    SELECT * FROM user_blocked 
+                    WHERE userid = %s AND blockeduserid = %s 
+                """, (curruntuserid, blockeduserid))
+                existing_block = await cursor.fetchone()
+
+                if existing_block:
+                    await cursor.execute(""" 
+                        DELETE FROM user_blocked WHERE userid = %s AND blockeduserid = %s 
+                    """, (curruntuserid, blockeduserid))
+                    action = "unblocked"
+                else:
+                    await cursor.execute(""" 
+                        INSERT INTO user_blocked (userid, blockeduserid, blockeddate, blockeduserprofile, username) 
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (curruntuserid, blockeduserid, datetime.now(), user_details['profileimage'], user_details['username']))
+                    action = "blocked"
+
+                await conn.commit()
+
+                return {"message": action}
+
+    except aiomysql.Error as err:
+        print(f"Error: {err}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+            
+            
+            
+            
+            
+            
+            
+
+
+
+
+    
+    
+    
+    
   
   
   
@@ -4270,7 +4660,7 @@ async def get_followers_posts_feed(
                             FROM post p
                             LEFT JOIN image i ON p.postid = i.postid
                             WHERE p.userid = %s
-                            ORDER BY p.posteddate DESC LIMIT %s OFFSET %s
+                            ORDER BY  RAND() LIMIT %s OFFSET %s
                         """, (otheruserid, limit, offset))
                         
                         user_posts = await cursor.fetchall()
@@ -4318,7 +4708,7 @@ async def get_followers_posts_feed(
                             FROM grouppost gp
                             LEFT JOIN groupimage gi ON gp.postid = gi.postid
                             WHERE gp.groupid = %s
-                            ORDER BY gp.posteddate DESC   LIMIT %s OFFSET %s
+                            ORDER BY RAND()   LIMIT %s OFFSET %s
                         """, (groupid, limit, offset))
                         
                         group_posts = await cursor.fetchall()
@@ -4386,6 +4776,170 @@ async def get_comment_count(postid: int = Query(...)):
         return JSONResponse(content={"comment_count": 0}, status_code=200)
 
  
+    
+    
+    
+
+
+
+def serialize_blocked_user_data(record):
+    """
+    Serialize a single record (dictionary).
+    """
+    if not record:
+        return None
+
+    serialized_record = {}
+    for key, value in record.items():
+        if isinstance(value, datetime):
+            serialized_record[key] = value.isoformat()
+        elif isinstance(value, bytes):
+            serialized_record[key] = base64.b64encode(value).decode('utf-8')
+        else:
+            serialized_record[key] = value
+
+    return serialized_record
+
+@app.post("/get_blocked_user_list")
+async def get_blocked_user_list(userid: str = Form()):
+    global pool
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                
+                await cursor.execute("""SELECT * FROM user_blocked WHERE userid = %s""", (userid,))
+
+                user_details = await cursor.fetchall()
+                
+                serialized_users = [serialize_blocked_user_data(record) for record in user_details]
+
+                return {"message": "Success", "blocked_users": serialized_users}
+
+    except aiomysql.Error as err:
+        print(f"Database Error: {err}")
+        raise HTTPException(status_code=500, detail="Database Error")
+    except Exception as general_err:
+        print(f"Unexpected Error: {general_err}")
+        raise HTTPException(status_code=500, detail="Unexpected Error")
+    
+    
+    
+        
+    
+    
+
+
+
+
+
+
+
+def serialize_group_data(record):
+    """
+    Serialize a single record (dictionary).
+    """
+    if not record:
+        return None
+
+    serialized_record = {}
+    for key, value in record.items():
+        if isinstance(value, datetime):
+            serialized_record[key] = value.isoformat()
+        elif isinstance(value, bytes):  # Handling binary data for group image
+            serialized_record[key] = base64.b64encode(value).decode('utf-8')
+        else:
+            serialized_record[key] = value
+
+    return serialized_record
+
+
+@app.post("/get_my_group_list")
+async def get_my_group_list(userid: str = Form(...)):
+    global pool
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute("SELECT * FROM groups WHERE groupownerid = %s", (userid,))
+                user_details = await cursor.fetchall()
+
+                serialized_groups = [serialize_group_data(record) for record in user_details]
+
+                return {"message": "Success", "serialized_groups": serialized_groups}
+
+    except aiomysql.Error as err:
+        print(f"Database Error: {err}")
+        raise HTTPException(status_code=500, detail="Database Error")
+    except Exception as general_err:
+        print(f"Unexpected Error: {general_err}")
+        raise HTTPException(status_code=500, detail="Unexpected Error")
+    
+    
+    
+
+
+
+
+@app.post("/get_iamfollowing_group_list")
+async def get_iamfollowing_group_list(userid: str = Form(...)):
+    global pool
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute("SELECT groupid FROM iamfollowing WHERE myuserid = %s AND type = 'group'", (userid,))
+                group_ids = await cursor.fetchall()   
+                
+                if not group_ids:
+                    raise HTTPException(status_code=404, detail="No groups found that the user is following")
+                
+                group_ids = [group['groupid'] for group in group_ids]
+                
+                format_strings = ','.join(['%s'] * len(group_ids))   
+                await cursor.execute(f"SELECT * FROM groups WHERE groupid IN ({format_strings})", tuple(group_ids))
+                groups_details = await cursor.fetchall()
+                
+                serialized_groups = [serialize_group_data(record) for record in groups_details]
+
+                return {"message": "Success", "serialized_my_follwoing_groups": serialized_groups}
+    
+    except aiomysql.Error as err:
+        print(f"Database Error: {err}")
+        raise HTTPException(status_code=500, detail="Database Error")
+    except Exception as general_err:
+        print(f"Unexpected Error: {general_err}")
+        raise HTTPException(status_code=500, detail="Unexpected Error")
+
+    
+    
+    
+        
+    
+    
+    
+    
+    
+
+@app.post("/remove_blocked_user")
+async def remove_blocked_user(
+    blockeduserid: str = Form()):
+    global pool
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute("""
+                    DELETE FROM user_blocked WHERE blockeduserid = %s
+                """, (blockeduserid,))
+
+                await conn.commit()
+
+                return {"message": "removed"}
+
+    except aiomysql.Error as err:
+        print(f"Database Error: {err}")
+        raise HTTPException(status_code=500, detail="Database Error")
+    except Exception as general_err:
+        print(f"Unexpected Error: {general_err}")
+        raise HTTPException(status_code=500, detail="Unexpected Error")
+    
     
     
     
@@ -5331,15 +5885,12 @@ async def update_user_details(
     userid: int = Form(...),
     username: str = Form(...),
     emailaddress: str = Form(...),
-    phonenumber: str = Form(...)
+    phonenumber: str = Form(...),
 ):
- 
-    
     global pool
     try:
         async with pool.acquire() as conn:  
             async with conn.cursor(aiomysql.DictCursor) as cursor:  
-  
                 await cursor.execute("SELECT profileimage FROM user WHERE userid = %s", (userid,))
                 user_record = await cursor.fetchone()
 
@@ -5348,10 +5899,15 @@ async def update_user_details(
                 
                 user_profileimage = user_record['profileimage']
 
-       
                 await cursor.execute(
                     "UPDATE user SET username = %s, emailaddress = %s, phonenumber = %s, profileimage = %s WHERE userid = %s",
                     (username, emailaddress, phonenumber, user_profileimage, userid)
+                )
+                await conn.commit()
+
+                await cursor.execute(
+                    "UPDATE post SET username = %s WHERE userid = %s",
+                    (username, userid)
                 )
                 await conn.commit()
 
@@ -5364,6 +5920,7 @@ async def update_user_details(
 
     except Exception as e:
         return JSONResponse(content={"message": f"Internal Server Error: {str(e)}"}, status_code=500)
+
 
  
     
@@ -6692,36 +7249,40 @@ async def get_all_video_posts_slider(limit: int = 5, offset: int = 0):
 @app.post("/search-enter-press-result-image-link-text")
 async def search_enter_press_result_image_link_text(
     searchtext: str = Form(...),
-     limit: int = Form(10),   
-    offset: int = Form(0) 
- 
-    
+    limit: int = Form(10),
+    offset: int = Form(0)
 ):
     global pool
-    searchtext = f"%{searchtext}%" 
+    searchtext = f"%{searchtext}%"  # Prepare for SQL LIKE query
+
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             try:
-                await cursor.execute("""
-                SELECT * FROM post 
-                WHERE posttype = 'text' OR posttype = 'link' OR posttype = 'image' 
-                AND postdescription LIKE %s OR textbody LIKE %s
-                ORDER BY posteddate DESC
-                LIMIT %s OFFSET %s
-                """, (searchtext, searchtext, limit, offset))
+                # SQL query to search posts and calculate relevance based on the number of occurrences of searchtext
+                query = """
+                    SELECT *,
+                    (LENGTH(postdescription) - LENGTH(REPLACE(postdescription, %s, ''))) / LENGTH(%s) AS relevance_desc,
+                    (LENGTH(textbody) - LENGTH(REPLACE(textbody, %s, ''))) / LENGTH(%s) AS relevance_text
+                    FROM post 
+                    WHERE (posttype = 'text' OR posttype = 'link' OR posttype = 'image') 
+                    AND (postdescription LIKE %s OR textbody LIKE %s)
+                    ORDER BY relevance_desc DESC, relevance_text DESC
+                    LIMIT %s OFFSET %s
+                """
+                await cursor.execute(query, (searchtext, searchtext, searchtext, searchtext, searchtext, searchtext, limit, offset))
                 records = await cursor.fetchall()
 
                 processed_records = []
 
                 for record in records:
                     if record['posttype'] == 'image':
+                        # Process image post with additional info
                         await cursor.execute("""
-                            SELECT p.userid, p.username, p.postdescription, p.posteddate, p.userprofile, p.posttype, p.postid,p.n_or_g,p.groupname,p.groupid,p.grouptype,
-                                i.image
+                            SELECT p.userid, p.username, p.postdescription, p.posteddate, p.userprofile, p.posttype, p.postid, p.n_or_g,
+                                   p.groupname, p.groupid, p.grouptype, i.image
                             FROM post p
                             LEFT JOIN image i ON p.postid = i.postid
-                            WHERE p.posttype = 'image' AND p.postid = %s
-                            ORDER BY p.posteddate DESC
+                            WHERE p.posttype = 'image' AND p.postid = %s 
                         """, (record['postid'],))
                         image_records = await cursor.fetchall()
 
@@ -6733,7 +7294,8 @@ async def search_enter_press_result_image_link_text(
 
                             processed_records.append(image_record)
 
-                    elif record['posttype'] in [  'text', 'link' ]:
+                    elif record['posttype'] in ['text', 'link']:
+                        # Process text or link posts
                         post_record = {
                             'postid': record['postid'],
                             'userid': record['userid'],
