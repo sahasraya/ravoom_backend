@@ -1,0 +1,13 @@
+# Ignore virtual environment folder
+venv/
+images/
+api-old/
+
+# Ignore Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore environment and dependency files
+.env
+
