@@ -525,7 +525,6 @@ async def create_tables():
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="log-in")
-# SECRET_KEY = "fwahfkawhfkawSajshHJHKjjfhwekefkejhfksjehfksejhfksejhfkshekfjh"
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 
@@ -5655,6 +5654,7 @@ async def fetch_link_preview(url: str):
         )
 
         # Fetching image
+        # nnnnnnnnn
         image_tag = (
             soup.find("meta", attrs={"property": "og:image"})
             or soup.find("meta", attrs={"name": "twitter:image"})
@@ -5667,7 +5667,7 @@ async def fetch_link_preview(url: str):
             else (image_tag["src"] if image_tag else "")
         )
 
-        # Additional Facebook-specific metadata
+        # Additional metadata for site name (OG) and Facebook App ID
         site_name_tag = soup.find("meta", attrs={"property": "og:site_name"})
         site_name = (
             site_name_tag["content"]
@@ -5682,27 +5682,30 @@ async def fetch_link_preview(url: str):
             else "No App ID available"
         )
 
-        # Check for YouTube URLs
+        # Parse URL and handle domain-specific cases
         parsed_url = urlparse(url)
         domain = parsed_url.netloc
+
+        # YouTube: Fetch thumbnail for YouTube videos
         if "youtube.com" in domain or "youtu.be" in domain:
             video_id = None
             youtube_regex = r"(?:youtube\.com\/(?:[^\/]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})"
             match = re.search(youtube_regex, url)
             if match:
                 video_id = match.group(1)
-
             if video_id:
                 image = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
 
-        # Check for Twitter Cards or other media services
+        # Check for other known domains like Twitter and generic websites
         elif "twitter.com" in domain:
-            # For Twitter, metadata is often in 'twitter:*' tags
             twitter_image_tag = soup.find("meta", attrs={"name": "twitter:image"})
             if twitter_image_tag and twitter_image_tag.has_attr("content"):
                 image = twitter_image_tag["content"]
 
-        # You can add other media platforms such as Instagram, Vimeo, etc.
+        # Handle generic websites
+        else:
+            # You can extend this for more platform-specific logic if needed
+            pass
 
         return {
             "title": title,
