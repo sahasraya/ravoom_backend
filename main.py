@@ -5997,63 +5997,57 @@ async def update_notification_clicked(notificationid: str = Form(...)):
     
 async def fetch_link_preview(url: str):
     try:
+        # Perform the HTTP request asynchronously
         async with httpx.AsyncClient() as client:
             response = await client.get(url, timeout=10)
             response.raise_for_status()
 
+        # Parse the response content asynchronously using BeautifulSoup
         soup = BeautifulSoup(response.content, 'html.parser')
 
         # Fetching title
         title_tag = soup.find('meta', attrs={'property': 'og:title'}) or \
                     soup.find('meta', attrs={'name': 'twitter:title'}) or \
                     soup.find('title')
-        title = title_tag['content'] if title_tag and title_tag.has_attr('content') else (title_tag.string if title_tag else 'No title available')
+        title = title_tag['content'] if title_tag and title_tag.has_attr('content') else \
+            (title_tag.string if title_tag else 'No title available')
 
         # Fetching description
         description_tag = soup.find('meta', attrs={'name': 'description'}) or \
                           soup.find('meta', attrs={'property': 'og:description'}) or \
                           soup.find('meta', attrs={'name': 'twitter:description'})
-        description = description_tag['content'] if description_tag and description_tag.has_attr('content') else 'No description available'
+        description = description_tag['content'] if description_tag and description_tag.has_attr('content') else \
+            'No description available'
 
         # Fetching image
-        #nnnnnnnnn
         image_tag = soup.find('meta', attrs={'property': 'og:image'}) or \
                     soup.find('meta', attrs={'name': 'twitter:image'}) or \
                     soup.find('link', attrs={'rel': 'image_src'}) or \
                     soup.find('img')
-        image = image_tag['content'] if image_tag and image_tag.has_attr('content') else (image_tag['src'] if image_tag else '')
+        image = image_tag['content'] if image_tag and image_tag.has_attr('content') else \
+            (image_tag['src'] if image_tag else '')
 
-        # Additional metadata for site name (OG) and Facebook App ID
+        # Additional Facebook-specific metadata
         site_name_tag = soup.find('meta', attrs={'property': 'og:site_name'})
-        site_name = site_name_tag['content'] if site_name_tag and site_name_tag.has_attr('content') else 'No site name available'
+        site_name = site_name_tag['content'] if site_name_tag and site_name_tag.has_attr('content') else \
+            'No site name available'
 
         fb_app_id_tag = soup.find('meta', attrs={'property': 'fb:app_id'})
-        fb_app_id = fb_app_id_tag['content'] if fb_app_id_tag and fb_app_id_tag.has_attr('content') else 'No App ID available'
+        fb_app_id = fb_app_id_tag['content'] if fb_app_id_tag and fb_app_id_tag.has_attr('content') else \
+            'No App ID available'
 
-        # Parse URL and handle domain-specific cases
+        # Parsing the domain and handling YouTube thumbnails
         parsed_url = urlparse(url)
         domain = parsed_url.netloc
-
-        # YouTube: Fetch thumbnail for YouTube videos
         if 'youtube.com' in domain or 'youtu.be' in domain:
             video_id = None
             youtube_regex = r'(?:youtube\.com\/(?:[^\/]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
             match = re.search(youtube_regex, url)
             if match:
                 video_id = match.group(1)
+
             if video_id:
                 image = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
-
-        # Check for other known domains like Twitter and generic websites
-        elif 'twitter.com' in domain:
-            twitter_image_tag = soup.find('meta', attrs={'name': 'twitter:image'})
-            if twitter_image_tag and twitter_image_tag.has_attr('content'):
-                image = twitter_image_tag['content']
-
-        # Handle generic websites
-        else:
-            # You can extend this for more platform-specific logic if needed
-            pass
 
         return {
             'title': title,
@@ -6074,7 +6068,9 @@ async def fetch_link_preview(url: str):
 @app.post("/get-preview")
 async def get_link_preview(url: str = Form(...)):
     try:
+        # Fetching preview asynchronously
         preview_data = await fetch_link_preview(url)
+        print(f"Preview Data: {preview_data}")  
         return JSONResponse(content=preview_data)
     except HTTPException as e:
         return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
