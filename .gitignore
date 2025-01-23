@@ -2,6 +2,7 @@
 venv/
 images/
 api-old/
+.vscode/
 
 # Ignore Python compiled files
 __pycache__/
