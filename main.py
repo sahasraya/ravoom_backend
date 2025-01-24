@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlparse
 import aiomysql
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form,status, HTTPException, Query, UploadFile, requests
 from fastapi.concurrency import asynccontextmanager
 from fastapi.responses import JSONResponse
@@ -32,27 +33,32 @@ from pydub import AudioSegment
 
 import pymysql
 
+load_dotenv()
+
 app = FastAPI()
 
+ 
+
 sync_db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '',   
-    'database': 'mydb'
+    "host": os.getenv("DB_HOST"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "database": os.getenv("DB_NAME"),
 }
 
- 
+
 async_db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '',  
-    'db': 'mydb',  
-    'port': 3306,   
-    'minsize': 1,   
-    'maxsize': 10,   
-    'autocommit': True   
-    # 'ssl': {},  
+    "host": os.getenv("DB_HOST"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "db": os.getenv("DB_NAME"),
+    "port": 3306,
+    "minsize": 4,
+    "maxsize": 16,
+    "autocommit": True,
+    # 'ssl': {},
 }
+
 
 conn = mysql.connector.connect(**sync_db_config)
 
@@ -735,7 +741,6 @@ async def report_post(
     message["From"] = sender_email
     message["To"] = receiver_email  
 
-    print(f"Sending email to: {receiver_email} and {additional_recipient}")
 
     html = f"""
     <html>
@@ -6010,7 +6015,7 @@ async def fetch_link_preview(url: str):
                     soup.find('meta', attrs={'name': 'twitter:title'}) or \
                     soup.find('title')
         title = title_tag['content'] if title_tag and title_tag.has_attr('content') else \
-            (title_tag.string if title_tag else 'No title available')
+            (title_tag.string if title_tag else 'NO title')  # Changed default to 'NO title'
 
         # Fetching description
         description_tag = soup.find('meta', attrs={'name': 'description'}) or \
@@ -6049,6 +6054,11 @@ async def fetch_link_preview(url: str):
             if video_id:
                 image = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
 
+        # Additional checks for 123movies or similar streaming websites
+        if '123movies' in domain:
+            title = title or "NO title"
+            image = image or "https://example.com/default_image.jpg"  # Placeholder if no image is found
+
         return {
             'title': title,
             'description': description,
@@ -6070,7 +6080,7 @@ async def get_link_preview(url: str = Form(...)):
     try:
         # Fetching preview asynchronously
         preview_data = await fetch_link_preview(url)
-        print(f"Preview Data: {preview_data}")  
+        print(f"Preview Data: {preview_data}")
         return JSONResponse(content=preview_data)
     except HTTPException as e:
         return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
