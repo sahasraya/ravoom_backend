@@ -59,7 +59,6 @@ async_db_config = {
     # 'ssl': {},
 }
 
-
 conn = mysql.connector.connect(**sync_db_config)
 
 app.add_middleware(

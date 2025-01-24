@@ -1,0 +1,14 @@
+# Ignore virtual environment and other local unnecessary folders
+venv/
+images/
+api-old/
+.vscode/
+
+# Ignore Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore environment and dependency files
+.env
+
