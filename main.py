@@ -64,7 +64,7 @@ conn = mysql.connector.connect(**sync_db_config)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],
+    allow_origins=["https://ravoom.com", "http://localhost:4200", "http://127.0.0.1:4200"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1486,7 +1486,7 @@ async def check_postowner_online_status(
     try: 
         async with pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
-                query = "SELECT onlinestatus FROM USER WHERE userid = %s"
+                query = "SELECT onlinestatus FROM user WHERE userid = %s"
                 await cursor.execute(query, (userid,))
                 result = await cursor.fetchone()
                 print(f"result['onlinestatus']result['onlinestatus'] error: {result['onlinestatus']}")
