@@ -3,21 +3,22 @@ from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from io import BytesIO
-import json 
+import json
 import os
+from dotenv import load_dotenv
 from pathlib import Path
 import random
 import re
 import secrets
 import smtplib
+import ssl
 import string
 import tempfile
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlparse
 import aiomysql
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Form,status, HTTPException, Query, UploadFile, requests
+from fastapi import (Depends, FastAPI, File, Form, status, HTTPException, Query, UploadFile, requests,)
 from fastapi.concurrency import asynccontextmanager
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
@@ -29,10 +30,9 @@ from datetime import datetime, timedelta, timezone
 from playwright.sync_api import sync_playwright
 from moviepy.editor import VideoFileClip
 from pydub import AudioSegment
- 
-
 import pymysql
 
+# Load environment variables from .env file
 load_dotenv()
 
 app = FastAPI()
@@ -61,14 +61,14 @@ async_db_config = {
 
 conn = mysql.connector.connect(**sync_db_config)
 
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
-
 pool = None
 
  
@@ -642,7 +642,7 @@ async def create_tables():
         
         
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="log-in")
-SECRET_KEY = "fwahfkawhfkawSajshHJHKjjfhwekefkejhfksjehfksejhfksejhfkshekfjh"
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
   
 
@@ -716,9 +716,11 @@ async def report_post(
     selectedreportPostId: str = Form(...),
     selectedrepostpostowneruid: str = Form(...),
 ):
-    sender_email = "dilshanwickramaarachchi99@gmail.com"
-    password = "lqtj loqv aiqz wsty"
-    additional_recipient = "dev@ravoom.com"
+    sender_email = os.getenv("SMTP_USER")
+    sender_name = "Ravoom"
+    password = os.getenv("SMTP_PASS")
+    formatted_sender = f"{sender_name} <{sender_email}>"
+    additional_recipient = os.getenv("SMTP_USER")
 
     try:
         async with pool.acquire() as conn:
@@ -737,7 +739,7 @@ async def report_post(
 
     message = MIMEMultipart("alternative")
     message["Subject"] = "Report Submission Received"
-    message["From"] = sender_email
+    message["From"] = formatted_sender
     message["To"] = receiver_email  
 
 
@@ -769,7 +771,7 @@ async def report_post(
           <li><strong>Post ID:</strong> {selectedreportPostId}</li>
         </ul>
         <p>To view more details, visit your account by clicking the link below:</p>
-        <p><a href="http://localhost:4200/home/comment/{selectedreportPostId}/n/home" class="btn-link">View Post</a></p>
+        <p><a href="http://ravoom.com/home/comment/{selectedreportPostId}/n/home" class="btn-link">View Post</a></p>
         <p>Best Wishes,<br>Team Ravoom</p>
         <img src="cid:crabber_header" alt="Crabber Header" style="max-width: 40%; height: auto;"/>
       </body>
@@ -790,7 +792,9 @@ async def report_post(
         print(f"Error attaching image: {e}")
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        context = ssl.create_default_context()  # Create a secure context
+        with smtplib.SMTP(os.getenv("SMTP_HOST"), os.getenv("SMTP_PORT")) as server:
+            server.starttls(context=context)  # Secure the connection with the context
             server.login(sender_email, password)
             recipients = [receiver_email, additional_recipient]
             server.sendmail(sender_email, recipients, message.as_string())
@@ -829,12 +833,14 @@ async def report_post(
 async def send_email(receiver_email: str, user_id: int,username:string):
  
     
-    sender_email = "dilshanwickramaarachchi99@gmail.com"  
-    password = "lqtj loqv aiqz wsty"  
+    sender_email = os.getenv("SMTP_USER")
+    sender_name = "Ravoom"
+    password = os.getenv("SMTP_PASS")
+    formatted_sender = f"{sender_name} <{sender_email}>"
 
     message = MIMEMultipart("alternative")
     message["Subject"] = "Welcome to our service!"
-    message["From"] = sender_email
+    message["From"] = formatted_sender
     message["To"] = receiver_email
 
     html = f"""
@@ -874,7 +880,7 @@ async def send_email(receiver_email: str, user_id: int,username:string):
         </ul>
         <p>Your profile is ready – so jump in and start exploring. The best conversations are just a click away and say bye to Karma!</p>
         
-        <p><a href="http://localhost:4200/auth/email-auth/{user_id}" class="btn-link">Confirm Email</a></p>
+        <p><a href="http://ravoom.com/auth/email-auth/{user_id}" class="btn-link">Confirm Email</a></p>
         <p>Best Wishes,<br>Team Ravoom</p>
         
           <img src="cid:crabber_header" alt="Crabber Header" style="max-width: 40%; height: auto;"/>
@@ -898,9 +904,12 @@ async def send_email(receiver_email: str, user_id: int,username:string):
         message.attach(image)
         
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:   
+    context = ssl.create_default_context()  # Create a secure context
+    with smtplib.SMTP(os.getenv("SMTP_HOST"), os.getenv("SMTP_PORT")) as server:
+        server.starttls(context=context)  # Secure the connection with the context
         server.login(sender_email, password)
-        server.sendmail(sender_email, receiver_email, message.as_string())
+        recipients = [receiver_email, additional_recipient]
+        server.sendmail(sender_email, recipients, message.as_string())
         
         
 def generate_random_user_id(length=9):
@@ -1049,12 +1058,14 @@ def generate_random_code(length=6):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
 async def send_email_password_reset(username: str,receiver_email: str, code: str):
-    sender_email = "dilshanwickramaarachchi99@gmail.com"
-    password = "lqtj loqv aiqz wsty"
+    sender_email = os.getenv("SMTP_USER")
+    sender_name = "Ravoom"
+    password = os.getenv("SMTP_PASS")
+    formatted_sender = f"{sender_name} <{sender_email}>"
 
     message = MIMEMultipart("alternative")
     message["Subject"] = "Password Reset"
-    message["From"] = sender_email
+    message["From"] = formatted_sender
     message["To"] = receiver_email
 
     html = f"""
@@ -1077,7 +1088,9 @@ async def send_email_password_reset(username: str,receiver_email: str, code: str
     part = MIMEText(html, "html")
     message.attach(part)
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+    context = ssl.create_default_context()  # Create a secure context
+    with smtplib.SMTP(os.getenv("SMTP_HOST"), os.getenv("SMTP_PORT")) as server:
+        server.starttls(context=context)  # Secure the connection with the context
         server.login(sender_email, password)
         server.sendmail(sender_email, receiver_email, message.as_string())
 
@@ -1289,12 +1302,14 @@ async def update_new_password(
 
 async def send_email_password_reset_successfully(receiver_email: str,username: str):
     try:
-        sender_email = "dilshanwickramaarachchi99@gmail.com"  
-        password = "lqtj loqv aiqz wsty"  
+        sender_email = os.getenv("SMTP_USER")
+        sender_name = "Ravoom"
+        password = os.getenv("SMTP_PASS")
+        formatted_sender = f"{sender_name} <{sender_email}>"
 
         message = MIMEMultipart("alternative")
         message["Subject"] = "Your Ravoom Password Has Been Successfully Reset"
-        message["From"] = sender_email
+        message["From"] = formatted_sender
         message["To"] = receiver_email
 
         html = f"""
@@ -1316,7 +1331,9 @@ async def send_email_password_reset_successfully(receiver_email: str,username: s
         part = MIMEText(html, "html")
         message.attach(part)
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        context = ssl.create_default_context()  # Create a secure context
+        with smtplib.SMTP(os.getenv("SMTP_HOST"), os.getenv("SMTP_PORT")) as server:
+            server.starttls(context=context)  # Secure the connection with the context
             server.login(sender_email, password)
             server.sendmail(sender_email, receiver_email, message.as_string())
 
@@ -1649,15 +1666,17 @@ async def send_email_forget_password(receiver_email: str, username: str, code: s
     if not is_valid_email(receiver_email):
         raise ValueError("Invalid email address")
 
-    sender_email = "dilshanwickramaarachchi99@gmail.com"
-    password = "lqtj loqv aiqz wsty"
+    sender_email = os.getenv("SMTP_USER")
+    sender_name = "Ravoom"
+    password = os.getenv("SMTP_PASS")
+    formatted_sender = f"{sender_name} <{sender_email}>"
 
     message = MIMEMultipart("alternative")
     message["Subject"] = "Reset Your Ravoom Password"
-    message["From"] = sender_email
+    message["From"] = formatted_sender
     message["To"] = receiver_email
 
-    reset_link = f"http://localhost:4200/reset-password/"
+    reset_link = f"http://ravoom.com/reset-password/"
 
     html = f"""
     <html>
@@ -1690,7 +1709,9 @@ async def send_email_forget_password(receiver_email: str, username: str, code: s
     part = MIMEText(html, "html")
     message.attach(part)
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+    context = ssl.create_default_context()  # Create a secure context
+    with smtplib.SMTP(os.getenv("SMTP_HOST"), os.getenv("SMTP_PORT")) as server:
+        server.starttls(context=context)  # Secure the connection with the context
         server.login(sender_email, password)
         server.sendmail(sender_email, receiver_email, message.as_string())
 
@@ -7750,4 +7771,4 @@ async def update_user_details(
 
 
  
-    
+     
