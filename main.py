@@ -36,7 +36,7 @@ import httpx
 from jose import jwt, JWTError
 import mysql.connector
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from playwright.sync_api import sync_playwright
 from moviepy.editor import VideoFileClip
 from pydub import AudioSegment
@@ -48,6 +48,7 @@ load_dotenv()
 
 app = FastAPI()
 
+ 
 
 sync_db_config = {
     "host": os.getenv("DB_HOST"),
@@ -591,6 +592,7 @@ async def report_post(
     password = os.getenv("SMTP_PASS")
     formatted_sender = f"{sender_name} <{sender_email}>"
     additional_recipient = os.getenv("SMTP_USER")
+    
 
     try:
         async with pool.acquire() as conn:
@@ -694,6 +696,7 @@ async def send_email(receiver_email: str, user_id: int, username: string):
     message["Subject"] = "Welcome to our service!"
     message["From"] = formatted_sender
     message["To"] = receiver_email
+    additional_recipient = "dev@ravoom.com"
 
     html = f"""
     <html>
@@ -5623,10 +5626,33 @@ async def update_notification_clicked(notificationid: str = Form(...)):
 
 async def fetch_link_preview(url: str):
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10)
-            response.raise_for_status()
+        # Define headers to mimic a browser request (important for live environment)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
 
+        # Retry logic for better handling of intermittent issues in the live environment
+        retries = 3
+        last_exception = None
+
+        for attempt in range(retries):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(url, headers=headers, timeout=10)
+                    response.raise_for_status()  # Raise for bad status codes
+                break  # Break if the request succeeds without issues
+            except httpx.RequestError as e:
+                last_exception = e
+                if attempt == retries - 1:
+                    raise HTTPException(status_code=400, detail=f"Error while fetching URL: {str(e)}")
+                else:
+                    time.sleep(2)  # Sleep before retrying the request (could increase the delay for better retry intervals)
+
+        # If all retries fail, raise the last error
+        if last_exception:
+            raise HTTPException(status_code=400, detail=f"Error after retries: {str(last_exception)}")
+
+        # Parsing the response content using BeautifulSoup
         soup = BeautifulSoup(response.content, "html.parser")
 
         # Fetching title
@@ -5654,7 +5680,6 @@ async def fetch_link_preview(url: str):
         )
 
         # Fetching image
-        # nnnnnnnnn
         image_tag = (
             soup.find("meta", attrs={"property": "og:image"})
             or soup.find("meta", attrs={"name": "twitter:image"})
@@ -5702,11 +5727,41 @@ async def fetch_link_preview(url: str):
             if twitter_image_tag and twitter_image_tag.has_attr("content"):
                 image = twitter_image_tag["content"]
 
-        # Handle generic websites
-        else:
-            # You can extend this for more platform-specific logic if needed
-            pass
+        # Handle Facebook-specific preview
+        elif "facebook.com" in domain:
+            # Facebook-specific meta data extraction
+            fb_title = (
+                soup.find("meta", attrs={"property": "og:title"})["content"]
+                if soup.find("meta", attrs={"property": "og:title"})
+                else "No title available"
+            )
+            fb_description = (
+                soup.find("meta", attrs={"property": "og:description"})["content"]
+                if soup.find("meta", attrs={"property": "og:description"})
+                else "No description available"
+            )
+            fb_image = (
+                soup.find("meta", attrs={"property": "og:image"})["content"]
+                if soup.find("meta", attrs={"property": "og:image"})
+                else ""
+            )
+            fb_site_name = (
+                soup.find("meta", attrs={"property": "og:site_name"})["content"]
+                if soup.find("meta", attrs={"property": "og:site_name"})
+                else "No site name available"
+            )
 
+            return {
+                "title": fb_title,
+                "description": fb_description,
+                "img": fb_image,
+                "domain": domain,
+                "site_name": fb_site_name,
+                "facebook_app_id": fb_app_id,
+                "url": url,
+            }
+
+        # Handle other cases
         return {
             "title": title,
             "description": description,
@@ -5725,7 +5780,6 @@ async def fetch_link_preview(url: str):
         raise HTTPException(
             status_code=500, detail=f"Failed to fetch the URL: {str(e)}"
         )
-
 
 @app.post("/get-preview")
 async def get_link_preview(url: str = Form(...)):
