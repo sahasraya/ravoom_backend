@@ -5624,6 +5624,9 @@ async def update_notification_clicked(notificationid: str = Form(...)):
         )
 
 
+ACCESS_TOKEN = "968961804690906|RSgys8QNZ-Nh-9AuMLO8wF3wB3E"
+
+# Facebook Graph API endpoint to fetch link preview data
 async def fetch_link_preview(url: str):
     try:
         # Define headers to mimic a browser request (important for live environment)
@@ -5638,7 +5641,9 @@ async def fetch_link_preview(url: str):
         for attempt in range(retries):
             try:
                 async with httpx.AsyncClient() as client:
-                    response = await client.get(url, headers=headers, timeout=15)  # Increased timeout for slow sites
+                    # Facebook Graph API URL with access token
+                    graph_api_url = f'https://graph.facebook.com/v11.0/?id={url}&access_token={ACCESS_TOKEN}'
+                    response = await client.get(graph_api_url, headers=headers, timeout=15)  # Increased timeout for slow sites
                     response.raise_for_status()  # Raise for bad status codes
                 break  # Break if the request succeeds without issues
             except httpx.RequestError as e:
@@ -5652,103 +5657,21 @@ async def fetch_link_preview(url: str):
         if last_exception:
             raise HTTPException(status_code=400, detail=f"Error after retries: {str(last_exception)}")
 
-        # Parsing the response content using BeautifulSoup
-        soup = BeautifulSoup(response.content, "html.parser")
+        # Parsing the response content using BeautifulSoup (Optional if HTML page data is needed)
+        preview_data = response.json()  # Directly using the Graph API's JSON response
 
-        # Default meta tag fetch for title
-        title_tag = (
-            soup.find("meta", attrs={"property": "og:title"})
-            or soup.find("meta", attrs={"name": "twitter:title"})
-            or soup.find("title")
-        )
-        title = (
-            title_tag["content"]
-            if title_tag and title_tag.has_attr("content")
-            else (title_tag.string if title_tag else "No title available")
-        )
-
-        # Default meta tag fetch for description
-        description_tag = (
-            soup.find("meta", attrs={"name": "description"})
-            or soup.find("meta", attrs={"property": "og:description"})
-            or soup.find("meta", attrs={"name": "twitter:description"})
-        )
-        description = (
-            description_tag["content"]
-            if description_tag and description_tag.has_attr("content")
-            else "No description available"
-        )
-
-        # Default image handling from open graph or twitter tags
-        image_tag = (
-            soup.find("meta", attrs={"property": "og:image"})
-            or soup.find("meta", attrs={"name": "twitter:image"})
-            or soup.find("link", attrs={"rel": "image_src"})
-            or soup.find("img")
-        )
-        image = (
-            image_tag["content"]
-            if image_tag and image_tag.has_attr("content")
-            else (image_tag["src"] if image_tag else "")
-        )
-
-        # Additional metadata for site name (OG) and Facebook App ID
-        site_name_tag = soup.find("meta", attrs={"property": "og:site_name"})
-        site_name = (
-            site_name_tag["content"]
-            if site_name_tag and site_name_tag.has_attr("content")
-            else "No site name available"
-        )
-
-        fb_app_id_tag = soup.find("meta", attrs={"property": "fb:app_id"})
-        fb_app_id = (
-            fb_app_id_tag["content"]
-            if fb_app_id_tag and fb_app_id_tag.has_attr("content")
-            else "No App ID available"
-        )
-
-        # Parse URL and handle domain-specific cases
-        parsed_url = urlparse(url)
-        domain = parsed_url.netloc
-
-        # Facebook-specific preview handling improvements
-        if "facebook.com" in domain:
-            fb_title = (
-                soup.find("meta", attrs={"property": "og:title"})["content"]
-                if soup.find("meta", attrs={"property": "og:title"})
-                else "No title available"
-            )
-            fb_description = (
-                soup.find("meta", attrs={"property": "og:description"})["content"]
-                if soup.find("meta", attrs={"property": "og:description"})
-                else "No description available"
-            )
-            fb_image = (
-                soup.find("meta", attrs={"property": "og:image"})["content"]
-                if soup.find("meta", attrs={"property": "og:image"})
-                else ""
-            )
-            fb_site_name = (
-                soup.find("meta", attrs={"property": "og:site_name"})["content"]
-                if soup.find("meta", attrs={"property": "og:site_name"})
-                else "No site name available"
-            )
-
-            return {
-                "title": fb_title,
-                "description": fb_description,
-                "img": fb_image,
-                "domain": domain,
-                "site_name": fb_site_name,
-                "facebook_app_id": fb_app_id,
-                "url": url,
-            }
+        # Extracting the preview data from the response
+        title = preview_data.get("title", "No title available")
+        description = preview_data.get("description", "No description available")
+        image = preview_data.get("image", "")
+        site_name = preview_data.get("site_name", "No site name available")
+        fb_app_id = preview_data.get("fb_app_id", "No App ID available")
 
         return {
             "title": title,
             "description": description,
             "img": image,
-            "domain": domain,
+            "domain": urlparse(url).netloc,
             "site_name": site_name,
             "facebook_app_id": fb_app_id,
             "url": url,
