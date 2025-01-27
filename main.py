@@ -5721,7 +5721,7 @@ async def fetch_link_preview(url: str):
             if video_id:
                 image = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
 
-        # Check for other known domains like Twitter and generic websites
+        # Check for Twitter-specific preview
         elif "twitter.com" in domain:
             twitter_image_tag = soup.find("meta", attrs={"name": "twitter:image"})
             if twitter_image_tag and twitter_image_tag.has_attr("content"):
@@ -5761,7 +5761,29 @@ async def fetch_link_preview(url: str):
                 "url": url,
             }
 
-        # Handle other cases
+        # Handle LinkedIn-specific preview
+        elif "linkedin.com" in domain:
+            linkedin_image_tag = soup.find("meta", attrs={"name": "og:image"})
+            if linkedin_image_tag and linkedin_image_tag.has_attr("content"):
+                image = linkedin_image_tag["content"]
+            linkedin_title_tag = soup.find("meta", attrs={"name": "og:title"})
+            if linkedin_title_tag:
+                title = linkedin_title_tag["content"]
+
+        # Handle Instagram-specific preview
+        elif "instagram.com" in domain:
+            instagram_image_tag = soup.find("meta", attrs={"property": "og:image"})
+            if instagram_image_tag and instagram_image_tag.has_attr("content"):
+                image = instagram_image_tag["content"]
+            instagram_title_tag = soup.find("meta", attrs={"property": "og:title"})
+            if instagram_title_tag:
+                title = instagram_title_tag["content"]
+
+        # Handle other generic websites or platforms
+        else:
+            # Catch other platform previews by returning the general tags
+            pass
+
         return {
             "title": title,
             "description": description,
@@ -5780,6 +5802,7 @@ async def fetch_link_preview(url: str):
         raise HTTPException(
             status_code=500, detail=f"Failed to fetch the URL: {str(e)}"
         )
+
 
 @app.post("/get-preview")
 async def get_link_preview(url: str = Form(...)):
