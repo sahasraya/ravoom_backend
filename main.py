@@ -5631,14 +5631,14 @@ async def fetch_link_preview(url: str):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
 
-        # Retry logic for better handling of intermittent issues in the live environment
-        retries = 3
+        # Retry logic for better handling of intermittent issues
+        retries = 5  # Increased retry attempts for a more robust approach
         last_exception = None
 
         for attempt in range(retries):
             try:
                 async with httpx.AsyncClient() as client:
-                    response = await client.get(url, headers=headers, timeout=10)
+                    response = await client.get(url, headers=headers, timeout=15)  # Increased timeout for slow sites
                     response.raise_for_status()  # Raise for bad status codes
                 break  # Break if the request succeeds without issues
             except httpx.RequestError as e:
@@ -5646,7 +5646,7 @@ async def fetch_link_preview(url: str):
                 if attempt == retries - 1:
                     raise HTTPException(status_code=400, detail=f"Error while fetching URL: {str(e)}")
                 else:
-                    time.sleep(2)  # Sleep before retrying the request (could increase the delay for better retry intervals)
+                    time.sleep(3)  # Sleep before retrying the request (could increase for better intervals)
 
         # If all retries fail, raise the last error
         if last_exception:
@@ -5655,7 +5655,7 @@ async def fetch_link_preview(url: str):
         # Parsing the response content using BeautifulSoup
         soup = BeautifulSoup(response.content, "html.parser")
 
-        # Fetching title
+        # Default meta tag fetch for title
         title_tag = (
             soup.find("meta", attrs={"property": "og:title"})
             or soup.find("meta", attrs={"name": "twitter:title"})
@@ -5667,7 +5667,7 @@ async def fetch_link_preview(url: str):
             else (title_tag.string if title_tag else "No title available")
         )
 
-        # Fetching description
+        # Default meta tag fetch for description
         description_tag = (
             soup.find("meta", attrs={"name": "description"})
             or soup.find("meta", attrs={"property": "og:description"})
@@ -5679,7 +5679,7 @@ async def fetch_link_preview(url: str):
             else "No description available"
         )
 
-        # Fetching image
+        # Default image handling from open graph or twitter tags
         image_tag = (
             soup.find("meta", attrs={"property": "og:image"})
             or soup.find("meta", attrs={"name": "twitter:image"})
@@ -5711,25 +5711,8 @@ async def fetch_link_preview(url: str):
         parsed_url = urlparse(url)
         domain = parsed_url.netloc
 
-        # YouTube: Fetch thumbnail for YouTube videos
-        if "youtube.com" in domain or "youtu.be" in domain:
-            video_id = None
-            youtube_regex = r"(?:youtube\.com\/(?:[^\/]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})"
-            match = re.search(youtube_regex, url)
-            if match:
-                video_id = match.group(1)
-            if video_id:
-                image = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
-
-        # Check for Twitter-specific preview
-        elif "twitter.com" in domain:
-            twitter_image_tag = soup.find("meta", attrs={"name": "twitter:image"})
-            if twitter_image_tag and twitter_image_tag.has_attr("content"):
-                image = twitter_image_tag["content"]
-
-        # Handle Facebook-specific preview
-        elif "facebook.com" in domain:
-            # Facebook-specific meta data extraction
+        # Facebook-specific preview handling improvements
+        if "facebook.com" in domain:
             fb_title = (
                 soup.find("meta", attrs={"property": "og:title"})["content"]
                 if soup.find("meta", attrs={"property": "og:title"})
@@ -5761,29 +5744,6 @@ async def fetch_link_preview(url: str):
                 "url": url,
             }
 
-        # Handle LinkedIn-specific preview
-        elif "linkedin.com" in domain:
-            linkedin_image_tag = soup.find("meta", attrs={"name": "og:image"})
-            if linkedin_image_tag and linkedin_image_tag.has_attr("content"):
-                image = linkedin_image_tag["content"]
-            linkedin_title_tag = soup.find("meta", attrs={"name": "og:title"})
-            if linkedin_title_tag:
-                title = linkedin_title_tag["content"]
-
-        # Handle Instagram-specific preview
-        elif "instagram.com" in domain:
-            instagram_image_tag = soup.find("meta", attrs={"property": "og:image"})
-            if instagram_image_tag and instagram_image_tag.has_attr("content"):
-                image = instagram_image_tag["content"]
-            instagram_title_tag = soup.find("meta", attrs={"property": "og:title"})
-            if instagram_title_tag:
-                title = instagram_title_tag["content"]
-
-        # Handle other generic websites or platforms
-        else:
-            # Catch other platform previews by returning the general tags
-            pass
-
         return {
             "title": title,
             "description": description,
@@ -5795,13 +5755,9 @@ async def fetch_link_preview(url: str):
         }
 
     except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=400, detail=f"Error while fetching URL: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Error while fetching URL: {str(e)}")
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to fetch the URL: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to fetch the URL: {str(e)}")
 
 
 @app.post("/get-preview")
@@ -5812,9 +5768,15 @@ async def get_link_preview(url: str = Form(...)):
     except HTTPException as e:
         return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
     except Exception as e:
-        return JSONResponse(
-            content={"message": f"Internal Server Error: {str(e)}"}, status_code=500
-        )
+        return JSONResponse(content={"message": f"Internal Server Error: {str(e)}"}, status_code=500)
+
+
+
+
+
+
+
+
 
 
 class DateTimeEncoder(json.JSONEncoder):
