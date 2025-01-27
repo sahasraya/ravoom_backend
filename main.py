@@ -5626,6 +5626,8 @@ async def update_notification_clicked(notificationid: str = Form(...)):
 
 ACCESS_TOKEN = "968961804690906|RSgys8QNZ-Nh-9AuMLO8wF3wB3E"
 
+app = FastAPI()
+
 # Facebook Graph API endpoint to fetch link preview data
 async def fetch_link_preview(url: str):
     try:
@@ -5657,8 +5659,8 @@ async def fetch_link_preview(url: str):
         if last_exception:
             raise HTTPException(status_code=400, detail=f"Error after retries: {str(last_exception)}")
 
-        # Parsing the response content using BeautifulSoup (Optional if HTML page data is needed)
-        preview_data = response.json()  # Directly using the Graph API's JSON response
+        # Parsing the response content directly from the JSON response of the Graph API
+        preview_data = response.json()  # Using the Graph API's JSON response
 
         # Extracting the preview data from the response
         title = preview_data.get("title", "No title available")
@@ -5692,7 +5694,6 @@ async def get_link_preview(url: str = Form(...)):
         return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
     except Exception as e:
         return JSONResponse(content={"message": f"Internal Server Error: {str(e)}"}, status_code=500)
-
 
 
 
