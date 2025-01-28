@@ -908,10 +908,11 @@ async def send_email(receiver_email: str, user_id: int,username:string):
     with smtplib.SMTP(os.getenv("SMTP_HOST"), os.getenv("SMTP_PORT")) as server:
         server.starttls(context=context)  # Secure the connection with the context
         server.login(sender_email, password)
-        recipients = [receiver_email, additional_recipient]
+        recipients = [receiver_email]
         server.sendmail(sender_email, recipients, message.as_string())
         
-        
+#   recipients = [receiver_email, additional_recipient]     
+ 
 def generate_random_user_id(length=9):
     if length > 9:
         raise ValueError("Maximum length for INT is 11 digits")
@@ -6020,64 +6021,31 @@ async def update_notification_clicked(notificationid: str = Form(...)):
     
     
     
-async def fetch_link_preview(url: str):
+ACCESS_TOKEN = "968961804690906|RSgys8QNZ-Nh-9AuMLO8wF3wB3E"
+
+app = FastAPI()
+
+# Fetch the preview from the Facebook Graph API using access token
+async def fetch_facebook_preview(url: str):
     try:
-        # Perform the HTTP request asynchronously
+        # Graph API endpoint with the access token to get post data
+        graph_api_url = f'https://graph.facebook.com/v11.0/?id={url}&access_token={ACCESS_TOKEN}'
+
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10)
+            response = await client.get(graph_api_url, timeout=10)
             response.raise_for_status()
 
-        # Parse the response content asynchronously using BeautifulSoup
-        soup = BeautifulSoup(response.content, 'html.parser')
+        preview_data = response.json()
 
-        # Fetching title
-        title_tag = soup.find('meta', attrs={'property': 'og:title'}) or \
-                    soup.find('meta', attrs={'name': 'twitter:title'}) or \
-                    soup.find('title')
-        title = title_tag['content'] if title_tag and title_tag.has_attr('content') else \
-            (title_tag.string if title_tag else 'NO title')  # Changed default to 'NO title'
+        # Extracting relevant fields from the response JSON
+        title = preview_data.get('title', 'No title available')
+        description = preview_data.get('description', 'No description available')
+        image = preview_data.get('image', '')
+        site_name = preview_data.get('site_name', 'No site name available')
+        fb_app_id = preview_data.get('fb_app_id', 'No App ID available')
 
-        # Fetching description
-        description_tag = soup.find('meta', attrs={'name': 'description'}) or \
-                          soup.find('meta', attrs={'property': 'og:description'}) or \
-                          soup.find('meta', attrs={'name': 'twitter:description'})
-        description = description_tag['content'] if description_tag and description_tag.has_attr('content') else \
-            'No description available'
-
-        # Fetching image
-        image_tag = soup.find('meta', attrs={'property': 'og:image'}) or \
-                    soup.find('meta', attrs={'name': 'twitter:image'}) or \
-                    soup.find('link', attrs={'rel': 'image_src'}) or \
-                    soup.find('img')
-        image = image_tag['content'] if image_tag and image_tag.has_attr('content') else \
-            (image_tag['src'] if image_tag else '')
-
-        # Additional Facebook-specific metadata
-        site_name_tag = soup.find('meta', attrs={'property': 'og:site_name'})
-        site_name = site_name_tag['content'] if site_name_tag and site_name_tag.has_attr('content') else \
-            'No site name available'
-
-        fb_app_id_tag = soup.find('meta', attrs={'property': 'fb:app_id'})
-        fb_app_id = fb_app_id_tag['content'] if fb_app_id_tag and fb_app_id_tag.has_attr('content') else \
-            'No App ID available'
-
-        # Parsing the domain and handling YouTube thumbnails
-        parsed_url = urlparse(url)
-        domain = parsed_url.netloc
-        if 'youtube.com' in domain or 'youtu.be' in domain:
-            video_id = None
-            youtube_regex = r'(?:youtube\.com\/(?:[^\/]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
-            match = re.search(youtube_regex, url)
-            if match:
-                video_id = match.group(1)
-
-            if video_id:
-                image = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
-
-        # Additional checks for 123movies or similar streaming websites
-        if '123movies' in domain:
-            title = title or "NO title"
-            image = image or "https://example.com/default_image.jpg"  # Placeholder if no image is found
+        # Parsing the domain (URL) using urllib
+        domain = urlparse(url).netloc
 
         return {
             'title': title,
@@ -6098,9 +6066,7 @@ async def fetch_link_preview(url: str):
 @app.post("/get-preview")
 async def get_link_preview(url: str = Form(...)):
     try:
-        # Fetching preview asynchronously
-        preview_data = await fetch_link_preview(url)
-        print(f"Preview Data: {preview_data}")
+        preview_data = await fetch_facebook_preview(url)
         return JSONResponse(content=preview_data)
     except HTTPException as e:
         return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
