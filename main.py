@@ -6023,7 +6023,7 @@ async def update_notification_clicked(notificationid: str = Form(...)):
     
 ACCESS_TOKEN = "968961804690906|RSgys8QNZ-Nh-9AuMLO8wF3wB3E"
 
-app = FastAPI()
+# app = FastAPI()
 
 # Fetch the preview from the Facebook Graph API using access token
 async def fetch_facebook_preview(url: str):
@@ -6849,7 +6849,7 @@ async def get_user_details(userid: int = Form(...)):
             else:
                 return JSONResponse(content={"message": "User not found"}, status_code=404)
     
-    
+
     
     
     
