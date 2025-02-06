@@ -6038,11 +6038,11 @@ async def fetch_facebook_preview(url: str):
         preview_data = response.json()
 
         # Extracting relevant fields from the response JSON
-        title = preview_data.get('title', 'No title available')
-        description = preview_data.get('description', 'No description available')
-        image = preview_data.get('image', '')
-        site_name = preview_data.get('site_name', 'No site name available')
-        fb_app_id = preview_data.get('fb_app_id', 'No App ID available')
+        title = preview_data.get('title', url)
+        description = preview_data.get('description', url)
+        image = preview_data.get('image', url)
+        site_name = preview_data.get('site_name', url)
+        fb_app_id = preview_data.get('fb_app_id', url)
 
         # Parsing the domain (URL) using urllib
         domain = urlparse(url).netloc
