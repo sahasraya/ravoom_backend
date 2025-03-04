@@ -29,8 +29,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta, timezone
 from playwright.sync_api import sync_playwright
 from moviepy.editor import VideoFileClip
-from pydub import AudioSegment
-import pymysql
+import requests
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -6567,6 +6567,49 @@ async def get_comments_group(
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") 
+    
+    
+
+
+
+
+
+
+
+@app.get("/get_link_preview")
+async def get_link_preview(url: str = Query(..., description="URL to fetch link preview")):
+    try:
+        # Ensure the URL has the correct schema (http or https)
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = f"http://{url}"
+        
+        # Send a GET request to the URL using the requests library
+        response = requests.get(url)
+        
+        if response.status_code != 200:
+            return JSONResponse(content={"error": "Unable to fetch URL"}, status_code=400)
+
+        # Parse the page content with BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Extract Open Graph metadata
+        title = soup.find("meta", property="og:title")
+        description = soup.find("meta", property="og:description")
+        image = soup.find("meta", property="og:image")
+        
+        # Prepare preview data
+        preview_data = {
+            "title": title["content"] if title else "No title available",
+            "description": description["content"] if description else "No description available",
+            "images": [image["content"]] if image else [],
+            "url": url
+        }
+
+        return JSONResponse(content=preview_data, status_code=200)
+
+    except Exception as e:
+        print(f"Error fetching link preview: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch link preview")
     
     
     
