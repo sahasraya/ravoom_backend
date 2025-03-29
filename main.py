@@ -29,8 +29,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta, timezone
 from playwright.sync_api import sync_playwright
 from moviepy.editor import VideoFileClip
+<<<<<<< HEAD
 from pydub import AudioSegment
 import pymysql
+=======
+import requests
+
+>>>>>>> 3f8f485f0191e780c7e8dc6568016bf4cd670583
 
 # Load environment variables from .env file
 load_dotenv()
@@ -908,10 +913,18 @@ async def send_email(receiver_email: str, user_id: int,username:string):
     with smtplib.SMTP(os.getenv("SMTP_HOST"), os.getenv("SMTP_PORT")) as server:
         server.starttls(context=context)  # Secure the connection with the context
         server.login(sender_email, password)
+<<<<<<< HEAD
         recipients = [receiver_email, additional_recipient]
         server.sendmail(sender_email, recipients, message.as_string())
         
         
+=======
+        recipients = [receiver_email]
+        server.sendmail(sender_email, recipients, message.as_string())
+        
+#   recipients = [receiver_email, additional_recipient]     
+ 
+>>>>>>> 3f8f485f0191e780c7e8dc6568016bf4cd670583
 def generate_random_user_id(length=9):
     if length > 9:
         raise ValueError("Maximum length for INT is 11 digits")
@@ -6020,6 +6033,7 @@ async def update_notification_clicked(notificationid: str = Form(...)):
     
     
     
+<<<<<<< HEAD
 async def fetch_link_preview(url: str):
     try:
         # Perform the HTTP request asynchronously
@@ -6078,6 +6092,33 @@ async def fetch_link_preview(url: str):
         if '123movies' in domain:
             title = title or "NO title"
             image = image or "https://example.com/default_image.jpg"  # Placeholder if no image is found
+=======
+ACCESS_TOKEN = "968961804690906|RSgys8QNZ-Nh-9AuMLO8wF3wB3E"
+
+# app = FastAPI()
+
+# Fetch the preview from the Facebook Graph API using access token
+async def fetch_facebook_preview(url: str):
+    try:
+        # Graph API endpoint with the access token to get post data
+        graph_api_url = f'https://graph.facebook.com/v11.0/?id={url}&access_token={ACCESS_TOKEN}'
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(graph_api_url, timeout=10)
+            response.raise_for_status()
+
+        preview_data = response.json()
+
+        # Extracting relevant fields from the response JSON
+        title = preview_data.get('title', url)
+        description = preview_data.get('description', url)
+        image = preview_data.get('image', url)
+        site_name = preview_data.get('site_name', url)
+        fb_app_id = preview_data.get('fb_app_id', url)
+
+        # Parsing the domain (URL) using urllib
+        domain = urlparse(url).netloc
+>>>>>>> 3f8f485f0191e780c7e8dc6568016bf4cd670583
 
         return {
             'title': title,
@@ -6098,9 +6139,13 @@ async def fetch_link_preview(url: str):
 @app.post("/get-preview")
 async def get_link_preview(url: str = Form(...)):
     try:
+<<<<<<< HEAD
         # Fetching preview asynchronously
         preview_data = await fetch_link_preview(url)
         print(f"Preview Data: {preview_data}")
+=======
+        preview_data = await fetch_facebook_preview(url)
+>>>>>>> 3f8f485f0191e780c7e8dc6568016bf4cd670583
         return JSONResponse(content=preview_data)
     except HTTPException as e:
         return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
@@ -6603,6 +6648,52 @@ async def get_comments_group(
         raise HTTPException(status_code=500, detail="Internal server error") 
     
     
+<<<<<<< HEAD
+=======
+
+
+
+
+
+
+
+@app.get("/get_link_preview")
+async def get_link_preview(url: str = Query(..., description="URL to fetch link preview")):
+    try:
+        # Ensure the URL has the correct schema (http or https)
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = f"http://{url}"
+        
+        # Send a GET request to the URL using the requests library
+        response = requests.get(url)
+        
+        if response.status_code != 200:
+            return JSONResponse(content={"error": "Unable to fetch URL"}, status_code=400)
+
+        # Parse the page content with BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Extract Open Graph metadata
+        title = soup.find("meta", property="og:title")
+        description = soup.find("meta", property="og:description")
+        image = soup.find("meta", property="og:image")
+        
+        # Prepare preview data
+        preview_data = {
+            "title": title["content"] if title else "No title available",
+            "description": description["content"] if description else "No description available",
+            "images": [image["content"]] if image else [],
+            "url": url
+        }
+
+        return JSONResponse(content=preview_data, status_code=200)
+
+    except Exception as e:
+        print(f"Error fetching link preview: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch link preview")
+    
+    
+>>>>>>> 3f8f485f0191e780c7e8dc6568016bf4cd670583
     
     
     
@@ -6883,7 +6974,11 @@ async def get_user_details(userid: int = Form(...)):
             else:
                 return JSONResponse(content={"message": "User not found"}, status_code=404)
     
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> 3f8f485f0191e780c7e8dc6568016bf4cd670583
     
     
     
@@ -7771,4 +7866,8 @@ async def update_user_details(
 
 
  
+<<<<<<< HEAD
      
+=======
+     
+>>>>>>> 3f8f485f0191e780c7e8dc6568016bf4cd670583
