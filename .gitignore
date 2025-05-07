@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Ignore virtual environment and other local unnecessary folders
 venv/
 images/
@@ -9,7 +8,6 @@ api-old/
 venv/
 images/
 api-old/
->>>>>>> 3f8f485f0191e780c7e8dc6568016bf4cd670583
 
 # Ignore Python compiled files
 __pycache__/
@@ -18,4 +16,6 @@ __pycache__/
 
 # Ignore environment and dependency files
 .env
-
+.env-bkup
+.*
+!/.gitignore
