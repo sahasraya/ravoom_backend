@@ -64,7 +64,7 @@ conn = mysql.connector.connect(**sync_db_config)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ravoom.com", "http://localhost:54842", "http://127.0.0.1:4200"],
+    allow_origins=["https://ravoom.com", "http://localhost:52559", "http://127.0.0.1:4200"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -6023,40 +6023,69 @@ async def update_notification_clicked(notificationid: str = Form(...)):
     
 ACCESS_TOKEN = "968961804690906|RSgys8QNZ-Nh-9AuMLO8wF3wB3E"
 
+@app.post("/get-preview")
+async def get_link_preview(url: str = Form(...)):
+    try:
+        if 'facebook.com' in url or 'instagram.com' in url:
+            preview_data = await fetch_facebook_preview(url)
+        else:
+            preview_data = await fetch_general_preview(url)
+        return JSONResponse(content=preview_data)
+    except HTTPException as e:
+        return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse(content={"message": f"Internal Server Error: {str(e)}"}, status_code=500)
+
+
+async def fetch_facebook_preview(url: str):
+    try:
+        graph_api_url = f'https://graph.facebook.com/v11.0/?id={url}&access_token={ACCESS_TOKEN}'
+        async with httpx.AsyncClient() as client:
+            response = await client.get(graph_api_url, timeout=10)
+            response.raise_for_status()
+        preview_data = response.json()
+
+        return {
+            'title': preview_data.get('title', url),
+            'description': preview_data.get('description', ''),
+            'img': preview_data.get('image'),
+            'domain': urlparse(url).netloc,
+            'site_name': preview_data.get('site_name', urlparse(url).netloc),
+            'facebook_app_id': preview_data.get('fb_app_id', ''),
+            'url': url
+        }
+    except Exception:
+        return await fetch_general_preview(url)
+
+
 async def fetch_general_preview(url: str):
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-        
         async with httpx.AsyncClient() as client:
             response = await client.get(url, headers=headers, timeout=10, follow_redirects=True)
             response.raise_for_status()
-        
         soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Extract metadata
+
         title = soup.find('meta', property='og:title') or soup.find('meta', attrs={'name': 'title'}) or soup.title
         description = soup.find('meta', property='og:description') or soup.find('meta', attrs={'name': 'description'})
         image = soup.find('meta', property='og:image')
         site_name = soup.find('meta', property='og:site_name')
-        
-        # Get values or defaults
+
         title = title.get('content') if title and hasattr(title, 'get') else title.string if title else url
         description = description.get('content') if description else None
         image_url = image.get('content') if image else None
         site_name = site_name.get('content') if site_name else urlparse(url).netloc
-        
-        # Fallback for image - try to find first image in the page
+
         if not image_url:
             first_img = soup.find('img')
             if first_img and first_img.get('src'):
                 image_url = first_img['src']
-                # Handle relative URLs
                 if image_url.startswith('/'):
                     base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
                     image_url = base_url + image_url
-        
+
         return {
             'title': title,
             'description': description,
@@ -6070,52 +6099,6 @@ async def fetch_general_preview(url: str):
         raise HTTPException(status_code=400, detail=f"Error while fetching URL: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch the URL: {str(e)}")
-
-@app.post("/get-preview")
-async def get_link_preview(url: str = Form(...)):
-    try:
-        # First try Facebook Graph API for Facebook/Instagram links
-        if 'facebook.com' in url or 'instagram.com' in url:
-            preview_data = await fetch_facebook_preview(url)
-        else:
-            # For all other URLs, use the general preview fetcher
-            preview_data = await fetch_general_preview(url)
-            
-        return JSONResponse(content=preview_data)
-    except HTTPException as e:
-        return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
-    except Exception as e:
-        return JSONResponse(content={"message": f"Internal Server Error: {str(e)}"}, status_code=500)
-
-async def fetch_facebook_preview(url: str):
-    try:
-        graph_api_url = f'https://graph.facebook.com/v11.0/?id={url}&access_token={ACCESS_TOKEN}'
-        async with httpx.AsyncClient() as client:
-            response = await client.get(graph_api_url, timeout=10)
-            response.raise_for_status()
-
-        preview_data = response.json()
-        
-        title = preview_data.get('title', url)
-        description = preview_data.get('description', '')
-        image = preview_data.get('image', None)
-        site_name = preview_data.get('site_name', urlparse(url).netloc)
-        fb_app_id = preview_data.get('fb_app_id', '')
-
-        domain = urlparse(url).netloc
-
-        return {
-            'title': title,
-            'description': description,
-            'img': image,
-            'domain': domain,
-            'site_name': site_name,
-            'facebook_app_id': fb_app_id,
-            'url': url
-        }
-    except Exception as e:
-        # If Facebook API fails, fall back to general preview
-        return await fetch_general_preview(url)
 
     
  
