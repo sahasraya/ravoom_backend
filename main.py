@@ -31,6 +31,8 @@ from playwright.sync_api import sync_playwright
 from moviepy.editor import VideoFileClip
 from pydub import AudioSegment
 import pymysql
+import requests
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -911,7 +913,8 @@ async def send_email(receiver_email: str, user_id: int,username:string):
         recipients = [receiver_email, additional_recipient]
         server.sendmail(sender_email, recipients, message.as_string())
         
-        
+   
+ 
 def generate_random_user_id(length=9):
     if length > 9:
         raise ValueError("Maximum length for INT is 11 digits")
@@ -5988,13 +5991,6 @@ async def update_notification_status(
     
     
     
-    
-    
-    
-    
-    
-        
-    
 @app.post("/update-notification-clicked")
 async def update_notification_clicked(notificationid: str = Form(...)):
     try:
@@ -6020,92 +6016,103 @@ async def update_notification_clicked(notificationid: str = Form(...)):
     
     
     
-async def fetch_link_preview(url: str):
-    try:
-        # Perform the HTTP request asynchronously
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10)
-            response.raise_for_status()
+# FB_ACCESS_TOKEN = "968961804690906|RSgys8QNZ-Nh-9AuMLO8wF3wB3E"
 
-        # Parse the response content asynchronously using BeautifulSoup
-        soup = BeautifulSoup(response.content, 'html.parser')
+# async def fetch_general_preview(url: str):
+#     try:
+#         headers = {
+#             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+#         }
+        
+#         async with httpx.AsyncClient() as client:
+#             response = await client.get(url, headers=headers, timeout=10, follow_redirects=True)
+#             response.raise_for_status()
+        
+#         soup = BeautifulSoup(response.text, 'html.parser')
+        
+#         # Extract metadata
+#         title = soup.find('meta', property='og:title') or soup.find('meta', attrs={'name': 'title'}) or soup.title
+#         description = soup.find('meta', property='og:description') or soup.find('meta', attrs={'name': 'description'})
+#         image = soup.find('meta', property='og:image')
+#         site_name = soup.find('meta', property='og:site_name')
+        
+#         # Get values or defaults
+#         title = title.get('content') if title and hasattr(title, 'get') else title.string if title else url
+#         description = description.get('content') if description else None
+#         image_url = image.get('content') if image else None
+#         site_name = site_name.get('content') if site_name else urlparse(url).netloc
+        
+#         # Fallback for image - try to find first image in the page
+#         if not image_url:
+#             first_img = soup.find('img')
+#             if first_img and first_img.get('src'):
+#                 image_url = first_img['src']
+#                 # Handle relative URLs
+#                 if image_url.startswith('/'):
+#                     base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+#                     image_url = base_url + image_url
+        
+#         return {
+#             'title': title,
+#             'description': description,
+#             'img': image_url,
+#             'domain': urlparse(url).netloc,
+#             'site_name': site_name,
+#             'facebook_app_id': fb_app_id,
+#             'url': url
+#         }
 
-        # Fetching title
-        title_tag = soup.find('meta', attrs={'property': 'og:title'}) or \
-                    soup.find('meta', attrs={'name': 'twitter:title'}) or \
-                    soup.find('title')
-        title = title_tag['content'] if title_tag and title_tag.has_attr('content') else \
-            (title_tag.string if title_tag else 'NO title')  # Changed default to 'NO title'
-
-        # Fetching description
-        description_tag = soup.find('meta', attrs={'name': 'description'}) or \
-                          soup.find('meta', attrs={'property': 'og:description'}) or \
-                          soup.find('meta', attrs={'name': 'twitter:description'})
-        description = description_tag['content'] if description_tag and description_tag.has_attr('content') else \
-            'No description available'
-
-        # Fetching image
-        image_tag = soup.find('meta', attrs={'property': 'og:image'}) or \
-                    soup.find('meta', attrs={'name': 'twitter:image'}) or \
-                    soup.find('link', attrs={'rel': 'image_src'}) or \
-                    soup.find('img')
-        image = image_tag['content'] if image_tag and image_tag.has_attr('content') else \
-            (image_tag['src'] if image_tag else '')
-
-        # Additional Facebook-specific metadata
-        site_name_tag = soup.find('meta', attrs={'property': 'og:site_name'})
-        site_name = site_name_tag['content'] if site_name_tag and site_name_tag.has_attr('content') else \
-            'No site name available'
-
-        fb_app_id_tag = soup.find('meta', attrs={'property': 'fb:app_id'})
-        fb_app_id = fb_app_id_tag['content'] if fb_app_id_tag and fb_app_id_tag.has_attr('content') else \
-            'No App ID available'
-
-        # Parsing the domain and handling YouTube thumbnails
-        parsed_url = urlparse(url)
-        domain = parsed_url.netloc
-        if 'youtube.com' in domain or 'youtu.be' in domain:
-            video_id = None
-            youtube_regex = r'(?:youtube\.com\/(?:[^\/]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
-            match = re.search(youtube_regex, url)
-            if match:
-                video_id = match.group(1)
-
-            if video_id:
-                image = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
-
-        # Additional checks for 123movies or similar streaming websites
-        if '123movies' in domain:
-            title = title or "NO title"
-            image = image or "https://example.com/default_image.jpg"  # Placeholder if no image is found
-
-        return {
-            'title': title,
-            'description': description,
-            'img': image,
-            'domain': domain,
-            'site_name': site_name,
-            'facebook_app_id': fb_app_id,
-            'url': url
-        }
-
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=400, detail=f"Error while fetching URL: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch the URL: {str(e)}")
+#     except httpx.RequestError as e:
+#         raise HTTPException(status_code=400, detail=f"Error while fetching URL: {str(e)}")
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Failed to fetch the URL: {str(e)}")
 
 
-@app.post("/get-preview")
-async def get_link_preview(url: str = Form(...)):
-    try:
-        # Fetching preview asynchronously
-        preview_data = await fetch_link_preview(url)
-        print(f"Preview Data: {preview_data}")
-        return JSONResponse(content=preview_data)
-    except HTTPException as e:
-        return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
-    except Exception as e:
-        return JSONResponse(content={"message": f"Internal Server Error: {str(e)}"}, status_code=500)
+# @app.post("/get-preview")
+# async def get_link_preview(url: str = Form(...)):
+#     try:
+#         # First try Facebook Graph API for Facebook/Instagram links
+#         if 'facebook.com' in url or 'instagram.com' in url:
+#             preview_data = await fetch_facebook_preview(url)
+#         else:
+#             # For all other URLs, use the general preview fetcher
+#             preview_data = await fetch_general_preview(url)
+            
+#         return JSONResponse(content=preview_data)
+#     except HTTPException as e:
+#         return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
+#     except Exception as e:
+#         return JSONResponse(content={"message": f"Internal Server Error: {str(e)}"}, status_code=500)
+
+# async def fetch_facebook_preview(url: str):
+#     try:
+#         graph_api_url = f'https://graph.facebook.com/v11.0/?id={url}&access_token={FB_ACCESS_TOKEN}'
+#         async with httpx.AsyncClient() as client:
+#             response = await client.get(graph_api_url, timeout=10)
+#             response.raise_for_status()
+
+#         preview_data = response.json()
+        
+#         title = preview_data.get('title', url)
+#         description = preview_data.get('description', '')
+#         image = preview_data.get('image', None)
+#         site_name = preview_data.get('site_name', urlparse(url).netloc)
+#         fb_app_id = preview_data.get('fb_app_id', '')
+
+#         domain = urlparse(url).netloc
+
+#         return {
+#             'title': title,
+#             'description': description,
+#             'img': image,
+#             'domain': domain,
+#             'site_name': site_name,
+#             'facebook_app_id': fb_app_id,
+#             'url': url
+#         }
+#     except Exception as e:
+#         # If Facebook API fails, fall back to general preview
+#         return await fetch_general_preview(url)
 
     
  
@@ -6603,6 +6610,49 @@ async def get_comments_group(
         raise HTTPException(status_code=500, detail="Internal server error") 
     
     
+
+
+
+
+
+
+
+@app.get("/get_link_preview")
+async def get_link_preview(url: str = Query(..., description="URL to fetch link preview")):
+    try:
+        # Ensure the URL has the correct schema (http or https)
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = f"http://{url}"
+        
+        # Send a GET request to the URL using the requests library
+        response = requests.get(url)
+        
+        if response.status_code != 200:
+            return JSONResponse(content={"error": "Unable to fetch URL"}, status_code=400)
+
+        # Parse the page content with BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Extract Open Graph metadata
+        title = soup.find("meta", property="og:title")
+        description = soup.find("meta", property="og:description")
+        image = soup.find("meta", property="og:image")
+        
+        # Prepare preview data
+        preview_data = {
+            "title": title["content"] if title else "No title available",
+            "description": description["content"] if description else "No description available",
+            "images": [image["content"]] if image else [],
+            "url": url
+        }
+
+        return JSONResponse(content=preview_data, status_code=200)
+
+    except Exception as e:
+        print(f"Error fetching link preview: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch link preview")
+    
+    
     
     
     
@@ -6771,7 +6821,85 @@ async def get_replay_comments(
     
     
     
-    
+ACCESS_TOKEN = "968961804690906|RSgys8QNZ-Nh-9AuMLO8wF3wB3E"
+
+@app.post("/get-preview")
+async def get_link_preview(url: str = Form(...)):
+    try:
+        if 'facebook.com' in url or 'instagram.com' in url:
+            preview_data = await fetch_facebook_preview(url)
+        else:
+            preview_data = await fetch_general_preview(url)
+        return JSONResponse(content=preview_data)
+    except HTTPException as e:
+        return JSONResponse(content={"message": e.detail}, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse(content={"message": f"Internal Server Error: {str(e)}"}, status_code=500)
+
+
+async def fetch_facebook_preview(url: str):
+    try:
+        graph_api_url = f'https://graph.facebook.com/v11.0/?id={url}&access_token={ACCESS_TOKEN}'
+        async with httpx.AsyncClient() as client:
+            response = await client.get(graph_api_url, timeout=10)
+            response.raise_for_status()
+        preview_data = response.json()
+
+        return {
+            'title': preview_data.get('title', url),
+            'description': preview_data.get('description', ''),
+            'img': preview_data.get('image'),
+            'domain': urlparse(url).netloc,
+            'site_name': preview_data.get('site_name', urlparse(url).netloc),
+            'facebook_app_id': preview_data.get('fb_app_id', ''),
+            'url': url
+        }
+    except Exception:
+        return await fetch_general_preview(url)
+
+
+async def fetch_general_preview(url: str):
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers, timeout=10, follow_redirects=True)
+            response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        title = soup.find('meta', property='og:title') or soup.find('meta', attrs={'name': 'title'}) or soup.title
+        description = soup.find('meta', property='og:description') or soup.find('meta', attrs={'name': 'description'})
+        image = soup.find('meta', property='og:image')
+        site_name = soup.find('meta', property='og:site_name')
+
+        title = title.get('content') if title and hasattr(title, 'get') else title.string if title else url
+        description = description.get('content') if description else None
+        image_url = image.get('content') if image else None
+        site_name = site_name.get('content') if site_name else urlparse(url).netloc
+
+        if not image_url:
+            first_img = soup.find('img')
+            if first_img and first_img.get('src'):
+                image_url = first_img['src']
+                if image_url.startswith('/'):
+                    base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+                    image_url = base_url + image_url
+
+        return {
+            'title': title,
+            'description': description,
+            'img': image_url,
+            'domain': urlparse(url).netloc,
+            'site_name': site_name,
+            'url': url
+        }
+
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=400, detail=f"Error while fetching URL: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch the URL: {str(e)}")
+
     
     
     
@@ -6883,7 +7011,7 @@ async def get_user_details(userid: int = Form(...)):
             else:
                 return JSONResponse(content={"message": "User not found"}, status_code=404)
     
-    
+
     
     
     
