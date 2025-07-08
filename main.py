@@ -64,7 +64,7 @@ conn = mysql.connector.connect(**sync_db_config)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ravoom.com", "http://localhost:52559", "http://127.0.0.1:4200"],
+    allow_origins=["https://ravoom.com" , "http://localhost:4200"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -3805,8 +3805,6 @@ async def add_post_image_group(
 
 
 
-
-
 @app.post("/add-post-link")
 async def add_post_link(
     uid: int = Form(...),
@@ -3816,8 +3814,6 @@ async def add_post_link(
     linkimage: Optional[str] = Form(None),
     current_user: str = Depends(get_current_user)
 ):
-    
-    
     if str(current_user) != str(uid):
         raise HTTPException(status_code=401, detail="Unauthorized access")
 
@@ -3834,7 +3830,7 @@ async def add_post_link(
 
                 username = user['username']
                 userprofile = user.get('profileimage', None)
-                
+
                 letter_string = generate_random_letter_string()
                 post_id = generate_combined_post_id(letter_string)
 
@@ -3842,10 +3838,25 @@ async def add_post_link(
 
                 await cursor.execute(
                     """
-                    INSERT INTO post (postid, userid, username, postdescription, posteddate, posttype, userprofile, filepath, textbody, thelink)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO post (
+                        postid, userid, username, postdescription, posteddate, 
+                        posttype, post, userprofile, filepath, textbody, thelink
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (post_id, uid, username, imagePostdescription, createddate, 'link', userprofile, linktitle, linkimageinsert, thelink)
+                    (
+                        post_id,
+                        uid,
+                        username,
+                        imagePostdescription,
+                        createddate,
+                        'link',
+                        linkimageinsert,  # 'post' field for storing preview image
+                        userprofile,
+                        linktitle,         # 'filepath' for storing link title
+                        linkimageinsert,   # reuse in 'textbody' if needed
+                        thelink
+                    )
                 )
 
                 await conn.commit()
@@ -3856,8 +3867,9 @@ async def add_post_link(
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Error processing request")
-    
+
     return JSONResponse(content={"message": "Link post added successfully"}, status_code=201)
+
 
 
 

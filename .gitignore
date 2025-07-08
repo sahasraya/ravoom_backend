@@ -1,3 +1,9 @@
+# Ignore virtual environment and other local unnecessary folders
+venv/
+images/
+api-old/
+.vscode/
+=======
 # Ignore virtual environment folder
 venv/
 images/
@@ -10,4 +16,6 @@ __pycache__/
 
 # Ignore environment and dependency files
 .env
-
+.env-bkup
+.*
+!/.gitignore
